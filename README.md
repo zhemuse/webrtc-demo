@@ -7,8 +7,8 @@
 ## 快速开始
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 然后打开 **两个** 标签页访问 <http://localhost:5173>，两边填**同一个房间号**，点「加入房间」。
@@ -20,8 +20,8 @@ npm run dev
 生产模式（前端构建产物由信令服务器一并托管，同源，只需要一个端口）：
 
 ```bash
-npm run build
-npm start          # http://localhost:8080
+pnpm build
+pnpm start         # http://localhost:8080
 ```
 
 ## 它是怎么跑起来的
@@ -69,8 +69,8 @@ client/src/main.ts      UI 与上述模块的粘合
 ## 测试
 
 ```bash
-npm test          # 单元测试（房间管理、文件切片/拼装）
-npm run typecheck # 两个 tsconfig 分别检查前后端
+pnpm test         # 单元测试（房间管理、文件切片/拼装）
+pnpm typecheck    # 两个 tsconfig 分别检查前后端
 ```
 
 单元测试只覆盖不依赖浏览器的纯逻辑。媒体协商部分靠手动验证 —— 真机摄像头和 NAT 打洞在 CI 里成本高、价值低。

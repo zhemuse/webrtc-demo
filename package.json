@@ -5,7 +5,7 @@
   "type": "module",
   "description": "WebRTC 入门 demo：1对1 音视频通话 + DataChannel 文字/文件传输，自建 WebSocket 信令",
   "scripts": {
-    "dev": "concurrently -n server,client -c blue,green \"npm:dev:server\" \"npm:dev:client\"",
+    "dev": "concurrently -n server,client -c blue,green \"tsx watch server/src/index.ts\" \"vite\"",
     "dev:server": "tsx watch server/src/index.ts",
     "dev:client": "vite",
     "build": "vite build",
@@ -26,6 +26,6 @@
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
     "vite": "^8.2.1",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.10"
   }
 }
