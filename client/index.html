@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebRTC Demo — 1对1 通话 + 数据通道</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>WebRTC Demo</h1>
+      <div class="statuses">
+        <span class="pill" id="signaling-status" data-state="closed">信令：未连接</span>
+        <span class="pill" id="peer-status" data-state="new">连接：未建立</span>
+        <span class="pill" id="role-status" hidden></span>
+      </div>
+    </header>
+
+    <section class="join" id="join-panel">
+      <label for="room-input">房间号</label>
+      <input
+        id="room-input"
+        type="text"
+        placeholder="任意字母数字，两边填同一个"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button id="join-button" type="button">加入房间</button>
+      <button id="leave-button" type="button" hidden>离开</button>
+      <p class="hint" id="hint">在两个标签页里填同一个房间号，即可开始通话。</p>
+    </section>
+
+    <main class="stage">
+      <section class="videos">
+        <figure class="video-card">
+          <video id="local-video" autoplay playsinline muted></video>
+          <figcaption>本地</figcaption>
+        </figure>
+        <figure class="video-card">
+          <video id="remote-video" autoplay playsinline></video>
+          <figcaption>远端</figcaption>
+        </figure>
+      </section>
+
+      <section class="controls">
+        <button id="toggle-mic" type="button" disabled>关闭麦克风</button>
+        <button id="toggle-cam" type="button" disabled>关闭摄像头</button>
+      </section>
+
+      <section class="chat">
+        <h2>数据通道</h2>
+        <ol class="messages" id="messages"></ol>
+
+        <form class="composer" id="chat-form">
+          <input
+            id="chat-input"
+            type="text"
+            placeholder="输入消息，回车发送"
+            autocomplete="off"
+            disabled
+          />
+          <button type="submit" id="send-button" disabled>发送</button>
+        </form>
+
+        <div class="file-row">
+          <input id="file-input" type="file" disabled />
+          <progress id="file-progress" max="1" value="0" hidden></progress>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
