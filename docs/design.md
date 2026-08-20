@@ -274,6 +274,131 @@ export type ClientMessage =
 
 房间号校验 `/^[A-Za-z0-9_-]{1,64}$/` 放在 `rooms.ts` 而非网络层，因此同样被单元测试覆盖。
 
+#### 消息示例
+
+以下是一次完整通话在 WebSocket 上传输的实际内容。A 先进房间（callee），B 后进（caller）。所有消息都是单行 JSON 文本帧，此处为便于阅读做了换行与截断（`…` 处为省略）。
+
+**1. A 加入房间**
+
+```jsonc
+// A → 服务器
+{ "type": "join", "roomId": "demo-42" }
+
+// 服务器 → A
+{ "type": "joined", "roomId": "demo-42", "role": "callee" }
+```
+
+此刻房间里只有 A，服务器不再发别的。A 进入等待状态。
+
+**2. B 加入同一房间**
+
+```jsonc
+// B → 服务器
+{ "type": "join", "roomId": "demo-42" }
+
+// 服务器 → B：房里已有人，所以你是 caller
+{ "type": "joined", "roomId": "demo-42", "role": "caller" }
+
+// 服务器 → A：有人来了
+{ "type": "peer-joined" }
+```
+
+`peer-joined` 不带任何字段。房间上限两人，收到它就意味着「另一个人是谁」不存在歧义。
+
+**3. B 发出 offer**
+
+B 先建 DataChannel，再 `createOffer()`，因此 SDP 里带 `m=application`（第三个媒体段）。
+
+```jsonc
+// B → 服务器 → A（服务器原样转发，不解析）
+{
+  "type": "offer",
+  "sdp": "v=0\r\no=- 4611731400430051336 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0 1 2\r\na=msid-semantic: WMS stream-id\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111 63 9 0 8\r\nc=IN IP4 0.0.0.0\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=ice-ufrag:4ZcD\r\na=ice-pwd:2/1muCWoOi3uLifh0NuRHlBl\r\na=fingerprint:sha-256 4A:AD:B9:B1:3F:82:18:3B:54:02:12:DF:3E:5D:49:6B:19:E5:7C:AB:3A:8E:07:24:2A:E5:66:23:1A:88:D0:C0\r\na=setup:actpass\r\na=mid:0\r\na=sendrecv\r\na=rtcp-mux\r\na=rtpmap:111 opus/48000/2\r\n…\r\nm=video 9 UDP/TLS/RTP/SAVPF 96 97 102\r\n…\r\na=mid:1\r\na=rtpmap:96 VP8/90000\r\n…\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 0.0.0.0\r\na=ice-ufrag:4ZcD\r\na=ice-pwd:2/1muCWoOi3uLifh0NuRHlBl\r\na=fingerprint:sha-256 4A:AD:B9:…\r\na=setup:actpass\r\na=mid:2\r\na=sctp-port:5000\r\na=max-message-size:262144\r\n"
+}
+```
+
+几处值得注意的地方：
+
+| 字段 | 含义 |
+| --- | --- |
+| `m=audio` / `m=video` / `m=application` | 三个媒体段。**没有 `m=application` 就说明 DataChannel 建晚了**（4.8 的第一个坑） |
+| `a=ice-ufrag` / `a=ice-pwd` | ICE 的用户名与密码，用于校验打洞报文的来源 |
+| `a=fingerprint` | DTLS 证书指纹。信令通道被篡改的话，这一行对不上，媒体连接直接失败 |
+| `a=setup:actpass` | 发起方声明「DTLS 角色由你定」，应答方会回 `active` 或 `passive` |
+| `a=sctp-port` / `a=max-message-size` | DataChannel 的 SCTP 参数 |
+
+SDP 本体是 `\r\n` 分隔的纯文本，作为 JSON 字符串传输时被转义成 `\r\n` 两个字符。**服务器不碰这个字符串** —— 对它而言这只是个需要投递的信封内容。
+
+**4. A 回 answer**
+
+```jsonc
+// A → 服务器 → B
+{
+  "type": "answer",
+  "sdp": "v=0\r\no=- 7148329127714823103 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0 1 2\r\n…\r\na=setup:active\r\n…"
+}
+```
+
+结构与 offer 对称，但 `a=setup` 变成了具体角色，编解码器列表也收敛为双方的交集。
+
+**5. 双向交换 ICE candidate**
+
+candidate 与 offer/answer **并行**流动，不等 SDP 交换完成。第三章讲过的三类地址，在实际报文里长这样：
+
+```jsonc
+// host —— 局域网地址，同机或同内网时用它直连
+{
+  "type": "ice-candidate",
+  "candidate": {
+    "candidate": "candidate:1510613869 1 udp 2122260223 192.168.1.5 54321 typ host generation 0 ufrag 4ZcD network-id 1",
+    "sdpMid": "0",
+    "sdpMLineIndex": 0,
+    "usernameFragment": "4ZcD"
+  }
+}
+
+// srflx —— STUN 服务器回报的公网映射地址，跨 NAT 时用它
+{
+  "type": "ice-candidate",
+  "candidate": {
+    "candidate": "candidate:842163049 1 udp 1677729535 203.0.113.7 61002 typ srflx raddr 192.168.1.5 rport 54321 generation 0 ufrag 4ZcD network-cost 999",
+    "sdpMid": "0",
+    "sdpMLineIndex": 0,
+    "usernameFragment": "4ZcD"
+  }
+}
+```
+
+`typ` 后面就是候选类型；`raddr`/`rport` 是 srflx 对应的内网地址。第三类 `typ relay` 本项目不会出现 —— 没配 TURN。
+
+candidate 字符串里那个大数字（`2122260223`）是优先级，host 高于 srflx 高于 relay，ICE 按优先级从高到低配对试探。
+
+一个实现细节：浏览器在候选收集结束时会触发一次 `candidate === null` 的事件，本项目直接忽略，**不发送**结束标记。对端靠连接状态变化判断结果，不需要知道对面收集完没有。
+
+**6. 结束**
+
+```jsonc
+// A 点了「离开」
+{ "type": "leave" }
+
+// 服务器 → B
+{ "type": "peer-left" }
+```
+
+直接关闭标签页时不会有 `leave`，服务器靠 WebSocket 的 `close` 事件走同一条清理路径，B 收到的仍是 `peer-left`。两条路径汇合于 `rooms.leave()`。
+
+**错误消息**
+
+```jsonc
+{ "type": "error", "reason": "room-full" }        // 第三个人想进两人房间
+{ "type": "error", "reason": "invalid-room-id" }  // 房间号不匹配 /^[A-Za-z0-9_-]{1,64}$/
+{ "type": "error", "reason": "already-joined" }   // 该连接已在某个房间里，又发了 join
+{ "type": "error", "reason": "not-in-room" }      // 没 join 就发 offer
+{ "type": "error", "reason": "bad-message" }      // JSON 解析失败或 type 无法识别
+```
+
+`reason` 是字面量联合类型而非自由字符串，客户端 `switch` 时同样受穷尽性检查保护。
+
 ### 4.7 文件传输
 
 ```mermaid
