@@ -4,6 +4,8 @@
 
 代码刻意写得直白，目的是把 WebRTC 的协商流程完整地摊开给人看，而不是藏在库后面。
 
+设计文档见 [docs/design.md](docs/design.md)：需求、技术栈选型、WebRTC 原理介绍、实现思路。
+
 ## 快速开始
 
 ```bash
